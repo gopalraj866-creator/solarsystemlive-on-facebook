@@ -64,11 +64,12 @@ jobs:
         if: env.BUILD != 'true'
         run: docker pull "$IMAGE:latest"
 
-      - name: Start YouTube Stream
+      - name: Start Live Stream (YouTube + Facebook)
         run: |
           docker run \
             -e VIDEO_URL="${{ secrets.VIDEO_URL }}" \
             -e YOUTUBE_STREAM_KEY="${{ secrets.YOUTUBE_STREAM_KEY }}" \
+            -e FACEBOOK_STREAM_KEY="${{ secrets.FACEBOOK_STREAM_KEY }}" \
             -e YOUTUBE_API_KEY="${{ secrets.YOUTUBE_API_KEY }}" \
             -e YOUTUBE_CHANNEL_ID="${{ secrets.YOUTUBE_CHANNEL_ID }}" \
             "$IMAGE:latest"
