@@ -8,14 +8,27 @@ if [ -z "${VIDEO_URL:-}" ]; then
     echo "ERROR: VIDEO_URL is not set"
     exit 1
 fi
-if [ -z "${YOUTUBE_STREAM_KEY:-}" ]; then
-    echo "ERROR: YOUTUBE_STREAM_KEY is not set"
+if [ -z "${YOUTUBE_STREAM_KEY:-}" ] && [ -z "${FACEBOOK_STREAM_KEY:-}" ]; then
+    echo "ERROR: Set YOUTUBE_STREAM_KEY and/or FACEBOOK_STREAM_KEY"
     exit 1
+fi
+
+# Build the list of destinations (ffmpeg "tee" muxer).
+# onfail=ignore -> if one platform disconnects, the other keeps streaming.
+TEE_OUT=""
+if [ -n "${YOUTUBE_STREAM_KEY:-}" ]; then
+    TEE_OUT+="[f=flv:onfail=ignore]rtmp://a.rtmp.youtube.com/live2/${YOUTUBE_STREAM_KEY}"
+    echo "Destination enabled: YouTube"
+fi
+if [ -n "${FACEBOOK_STREAM_KEY:-}" ]; then
+    [ -n "$TEE_OUT" ] && TEE_OUT+="|"
+    TEE_OUT+="[f=flv:onfail=ignore]rtmps://live-api-s.facebook.com:443/rtmp/${FACEBOOK_STREAM_KEY}"
+    echo "Destination enabled: Facebook"
 fi
 
 # Subscriber count + live viewer count are optional — if the API creds
 # aren't provided, those elements just stay blank instead of failing
-# the whole stream.
+# the whole stream. (Stats are read from YouTube only.)
 SHOW_STATS=true
 if [ -z "${YOUTUBE_API_KEY:-}" ] || [ -z "${YOUTUBE_CHANNEL_ID:-}" ]; then
     echo "NOTICE: YOUTUBE_API_KEY / YOUTUBE_CHANNEL_ID not set — subscriber/viewer stats will be hidden."
@@ -30,10 +43,11 @@ OUT_H=1080
 OUT_FPS=30
 VIDEO_BITRATE="6000k"      # YouTube-recommended range for 1080p30 is ~4500-9000k
 VIDEO_BUFSIZE="12000k"     # 2x bitrate
+# If Facebook is unstable, lower to VIDEO_BITRATE="4500k" and VIDEO_BUFSIZE="9000k"
 X264_PRESET="ultrafast"    # lightest preset — 1080p is heavy for a 2-core runner
 
 echo "========================================"
-echo "Starting 24/7 YouTube Stream — Black Holes"
+echo "Starting 24/7 Live Stream — Black Holes"
 echo "Output Resolution : ${OUT_W}x${OUT_H} (1080p)"
 echo "FPS               : ${OUT_FPS}"
 echo "Video bitrate     : ${VIDEO_BITRATE}"
@@ -407,8 +421,9 @@ run_video() {
         -ar 48000 \
         -ac 2 \
         -shortest \
-        -f flv \
-        "rtmp://a.rtmp.youtube.com/live2/${YOUTUBE_STREAM_KEY}"
+        -flags +global_header \
+        -f tee \
+        "$TEE_OUT"
         local exit_code=$?
         set -e
 
